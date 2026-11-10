@@ -5,18 +5,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 import 'package:rolostream_core/rolostream_core.dart' as core;
 
-/// Fuente AnimedLatino (animedlatino.com).
-///
-/// El sitio es PHP con el HTML ya renderizado, sin ofuscación:
-///  * Búsqueda: `/buscar?q=`; listados: `/recien-agregados`, `/tipo/{t}`, `/genero/{g}`, `/letra/{L}`
-///    (todos con `?pagina=N`), tarjetas `article.tarjeta`.
-///  * Ficha: `/serie/{slug}`, con los episodios en `li[data-capitulo="SxE"]`.
-///  * Episodio: `/ver/{slug}/{S}x{E}`. Los servidores son `button.servidor[data-url]`, y cada
-///    `data-url` es `/reproducir?e={id}`, una página mínima con un `<iframe src>` hacia el embed
-///    real: hay una petición extra por servidor.
-///
-/// Las secciones `/hentai` y `/adultos` del sitio no se consultan nunca. El resto de listados no
-/// ofrece ninguna marca fiable para separar contenido adulto, así que no se filtra.
+/// Las secciones `/hentai` y `/adultos` del sitio no se consultan nunca.
 class AnimedLatinoSource implements core.SourcePlugin {
   AnimedLatinoSource({String? baseUrl}) : baseUrl = baseUrl ?? defaultBaseUrl {
     _dio = Dio(BaseOptions(
@@ -66,11 +55,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
   @override
   core.FilterOptions get filterOptions => _filterOptions;
 
-  // ----------------------------------------------------------
-  // URLs
-  // ----------------------------------------------------------
-
-  /// `…/serie/naruto-shippuden` o `…/ver/naruto-shippuden/1x5` → `naruto-shippuden`.
   @override
   String slugFromUrl(String url) {
     final segs = Uri.tryParse(url)?.pathSegments.where((s) => s.isNotEmpty).toList() ?? [];
@@ -78,7 +62,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
     return segs.isEmpty ? url : segs.last;
   }
 
-  /// `…/ver/naruto-shippuden/2x5` → (`naruto-shippuden`, 20005).
   @override
   ({String slug, int numero})? parseEpisodeUrl(String url) {
     final path = Uri.tryParse(url)?.path ?? url;
@@ -106,10 +89,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
     );
     return html_parser.parse(res.data ?? '');
   }
-
-  // ----------------------------------------------------------
-  // Listados (tarjetas `article.tarjeta`)
-  // ----------------------------------------------------------
 
   List<({String titulo, String url, String imagen, String detalle})> _cards(Document doc) {
     final seen = <String>{};
@@ -144,7 +123,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
           core.RecentSerie(titulo: c.titulo, url: c.url, imagen: c.imagen),
       ];
 
-  /// `/ultimos`: "Capítulo 3 · Hace 14 horas".
   @override
   Future<List<core.RecentEpisode>> getLatestEpisodes() async {
     final doc = await _getDoc('$baseUrl/ultimos');
@@ -165,7 +143,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
     return out;
   }
 
-  /// "Emisión": las series más recientes, paginadas.
   @override
   Future<List<core.AiringAnime>> getAiringAnimes({int page = 1}) async {
     final doc = await _getDoc('$baseUrl/tipo/serie',
@@ -211,10 +188,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
     ];
   }
 
-  // ----------------------------------------------------------
-  // Detalle
-  // ----------------------------------------------------------
-
   @override
   Future<core.AnimeDetail> getAnime(String slug) async {
     final clean = slugFromUrl(slug);
@@ -258,10 +231,6 @@ class AnimedLatinoSource implements core.SourcePlugin {
     );
   }
 
-  // ----------------------------------------------------------
-  // Servidores
-  // ----------------------------------------------------------
-
   @override
   Future<List<core.VideoServer>> getServers(String slug, int numero) async {
     final e = decodeEpisode(numero);
@@ -299,10 +268,9 @@ class AnimedLatinoSource implements core.SourcePlugin {
     return [...out.where(supported), ...out.where((v) => !supported(v))];
   }
 
-  /// Extractores del proxy para los hosts de este sitio.
   static const proxySupported = ['okru', 'voe', 'streamwish', 'filemoon', 'doodstream', 'mp4upload'];
 
-  /// `/reproducir?e={id}` → URL del `<iframe>`. Se usa el parser HTML para decodificar `&amp;`.
+  /// Se usa el parser HTML para decodificar los `&amp;` del `src`.
   Future<String?> _resolve(String dataUrl, String referer) async {
     try {
       final doc = await _getDoc(dataUrl, referer: referer).timeout(const Duration(seconds: 10));
@@ -321,7 +289,6 @@ final _filterOptions = core.FilterOptions(
   letras: _letras,
 );
 
-// Valores tal como los usa animedlatino.com/genero/{valor}, /letra/{valor} y /tipo/{valor}.
 const _generos = <core.FilterOption>[
   core.FilterOption('accion', 'Acción'),
   core.FilterOption('aventura', 'Aventura'),
